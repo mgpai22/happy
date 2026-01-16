@@ -513,7 +513,7 @@ interface NewSessionWizardProps {
     onComplete: (config: {
         sessionType: 'simple' | 'worktree';
         profileId: string | null;
-        agentType: 'claude' | 'codex';
+        agentType: 'claude' | 'codex' | 'opencode';
         permissionMode: PermissionMode;
         modelMode: ModelMode;
         machineId: string;
@@ -542,8 +542,8 @@ export function NewSessionWizard({ onComplete, onCancel, initialPrompt = '' }: N
     // Wizard state
     const [currentStep, setCurrentStep] = useState<WizardStep>('profile');
     const [sessionType, setSessionType] = useState<'simple' | 'worktree'>('simple');
-    const [agentType, setAgentType] = useState<'claude' | 'codex'>(() => {
-        if (lastUsedAgent === 'claude' || lastUsedAgent === 'codex') {
+    const [agentType, setAgentType] = useState<'claude' | 'codex' | 'opencode'>(() => {
+        if (lastUsedAgent === 'claude' || lastUsedAgent === 'codex' || lastUsedAgent === 'opencode') {
             return lastUsedAgent;
         }
         return 'claude';
@@ -562,7 +562,7 @@ export function NewSessionWizard({ onComplete, onCancel, initialPrompt = '' }: N
             description: 'Default Claude configuration',
             anthropicConfig: {},
             environmentVariables: [],
-            compatibility: { claude: true, codex: false, gemini: false },
+            compatibility: { claude: true, codex: false, gemini: false, opencode: false },
             isBuiltIn: true,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -581,7 +581,7 @@ export function NewSessionWizard({ onComplete, onCancel, initialPrompt = '' }: N
                 { name: 'ANTHROPIC_SMALL_FAST_MODEL', value: 'deepseek-chat' },
                 { name: 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', value: '1' },
             ],
-            compatibility: { claude: true, codex: false, gemini: false },
+            compatibility: { claude: true, codex: false, gemini: false, opencode: false },
             isBuiltIn: true,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -596,7 +596,7 @@ export function NewSessionWizard({ onComplete, onCancel, initialPrompt = '' }: N
                 model: 'gpt-4-turbo',
             },
             environmentVariables: [],
-            compatibility: { claude: false, codex: true, gemini: false },
+            compatibility: { claude: false, codex: true, gemini: false, opencode: false },
             isBuiltIn: true,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -612,7 +612,7 @@ export function NewSessionWizard({ onComplete, onCancel, initialPrompt = '' }: N
                 deploymentName: 'gpt-4-turbo',
             },
             environmentVariables: [],
-            compatibility: { claude: false, codex: true, gemini: false },
+            compatibility: { claude: false, codex: true, gemini: false, opencode: false },
             isBuiltIn: true,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -628,7 +628,7 @@ export function NewSessionWizard({ onComplete, onCancel, initialPrompt = '' }: N
             environmentVariables: [
                 { name: 'AZURE_OPENAI_API_VERSION', value: '2024-02-15-preview' },
             ],
-            compatibility: { claude: false, codex: true, gemini: false },
+            compatibility: { claude: false, codex: true, gemini: false, opencode: false },
             isBuiltIn: true,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -643,7 +643,7 @@ export function NewSessionWizard({ onComplete, onCancel, initialPrompt = '' }: N
                 model: 'glm-4.6',
             },
             environmentVariables: [],
-            compatibility: { claude: true, codex: false, gemini: false },
+            compatibility: { claude: true, codex: false, gemini: false, opencode: false },
             isBuiltIn: true,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -658,7 +658,33 @@ export function NewSessionWizard({ onComplete, onCancel, initialPrompt = '' }: N
                 model: 'gpt-4-turbo',
             },
             environmentVariables: [],
-            compatibility: { claude: false, codex: true, gemini: false },
+            compatibility: { claude: false, codex: true, gemini: false, opencode: false },
+            isBuiltIn: true,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            version: '1.0.0',
+        },
+        {
+            id: 'opencode-fusion',
+            name: 'OpenCode (Fusion)',
+            description: 'Self-hosted cloud coding agent via Fusion API',
+            environmentVariables: [
+                { name: 'FUSION_API_URL', value: '${FUSION_API_URL:-http://localhost:8787}' },
+            ],
+            compatibility: { claude: false, codex: false, gemini: false, opencode: true },
+            isBuiltIn: true,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            version: '1.0.0',
+        },
+        {
+            id: 'opencode-local',
+            name: 'OpenCode (Local)',
+            description: 'Local OpenCode server for development',
+            environmentVariables: [
+                { name: 'OPENCODE_SERVER_URL', value: '${OPENCODE_SERVER_URL:-http://localhost:4096}' },
+            ],
+            compatibility: { claude: false, codex: false, gemini: false, opencode: true },
             isBuiltIn: true,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -1553,6 +1579,41 @@ export function NewSessionWizard({ onComplete, onCancel, initialPrompt = '' }: N
                                 )}
                             </View>
                             {agentType === 'codex' && (
+                                <Ionicons name="checkmark-circle" size={24} color={theme.colors.button.primary.background} />
+                            )}
+                        </Pressable>
+
+                        <Pressable
+                            style={[
+                                styles.agentOption,
+                                agentType === 'opencode' ? styles.agentOptionSelected : styles.agentOptionUnselected,
+                                selectedProfileId && !allProfiles.find(p => p.id === selectedProfileId)?.compatibility.opencode && {
+                                    opacity: 0.5,
+                                    backgroundColor: theme.colors.surface
+                                }
+                            ]}
+                            onPress={() => {
+                                if (!selectedProfileId || allProfiles.find(p => p.id === selectedProfileId)?.compatibility.opencode) {
+                                    setAgentType('opencode');
+                                }
+                            }}
+                            disabled={!!(selectedProfileId && !allProfiles.find(p => p.id === selectedProfileId)?.compatibility.opencode)}
+                        >
+                            <View style={[styles.agentIcon, { backgroundColor: '#10B981' }]}>
+                                <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>O</Text>
+                            </View>
+                            <View style={styles.agentInfo}>
+                                <Text style={styles.agentName}>OpenCode</Text>
+                                <Text style={styles.agentDescription}>
+                                    Self-hosted cloud coding agent via Fusion
+                                </Text>
+                                {selectedProfileId && !allProfiles.find(p => p.id === selectedProfileId)?.compatibility.opencode && (
+                                    <Text style={{ fontSize: 12, color: theme.colors.textDestructive, marginTop: 4 }}>
+                                        Not compatible with selected profile
+                                    </Text>
+                                )}
+                            </View>
+                            {agentType === 'opencode' && (
                                 <Ionicons name="checkmark-circle" size={24} color={theme.colors.button.primary.background} />
                             )}
                         </Pressable>

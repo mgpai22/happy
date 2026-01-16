@@ -22,6 +22,7 @@ const flavorIcons = {
     claude: require('@/assets/images/icon-claude.png'),
     codex: require('@/assets/images/icon-gpt.png'),
     gemini: require('@/assets/images/icon-gemini.png'),
+    opencode: require('@/assets/images/icon-opencode.png'),
 };
 
 const styles = StyleSheet.create((theme) => ({
@@ -73,7 +74,9 @@ export const Avatar = React.memo((props: AvatarProps) => {
                 ? Math.round(size * 0.25)
                 : effectiveFlavor === 'claude'
                     ? Math.round(size * 0.28)
-                    : Math.round(size * 0.35);
+                    : effectiveFlavor === 'opencode'
+                        ? Math.round(size * 0.30)
+                        : Math.round(size * 0.35);
 
             return (
                 <View style={[styles.container, { width: size, height: size }]}>
@@ -88,7 +91,7 @@ export const Avatar = React.memo((props: AvatarProps) => {
                             source={flavorIcon}
                             style={{ width: iconSize, height: iconSize }}
                             contentFit="contain"
-                            tintColor={effectiveFlavor === 'codex' ? theme.colors.text : undefined}
+                            tintColor={(effectiveFlavor === 'codex' || effectiveFlavor === 'opencode') ? theme.colors.text : undefined}
                         />
                     </View>
                 </View>
@@ -119,7 +122,9 @@ export const Avatar = React.memo((props: AvatarProps) => {
         ? Math.round(size * 0.25)
         : effectiveFlavor === 'claude'
             ? Math.round(size * 0.28)
-            : Math.round(size * 0.35);
+            : effectiveFlavor === 'opencode'
+                ? Math.round(size * 0.30)
+                : Math.round(size * 0.35);
 
     // Only wrap in container if showing flavor icons
     if (showFlavorIcons) {
@@ -136,7 +141,7 @@ export const Avatar = React.memo((props: AvatarProps) => {
                         source={flavorIcon}
                         style={{ width: iconSize, height: iconSize }}
                         contentFit="contain"
-                        tintColor={effectiveFlavor === 'codex' ? theme.colors.text : undefined}
+                        tintColor={(effectiveFlavor === 'codex' || effectiveFlavor === 'opencode') ? theme.colors.text : undefined}
                     />
                 </View>
             </View>

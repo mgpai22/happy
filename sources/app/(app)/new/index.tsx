@@ -35,6 +35,8 @@ import { isMachineOnline } from '@/utils/machineUtils';
 import { StatusDot } from '@/components/StatusDot';
 import { SearchableListSelector, SelectorConfig } from '@/components/SearchableListSelector';
 import { clearNewSessionDraft, loadNewSessionDraft, saveNewSessionDraft } from '@/sync/persistence';
+import { createFusionOpenCodeSession } from '@/sync/fusion';
+import { getFusionServerUrl } from '@/sync/serverConfig';
 
 // Simple temporary state for passing selections back from picker screens
 let onMachineSelected: (machineId: string) => void = () => { };
@@ -310,11 +312,12 @@ function NewSessionWizard() {
         }
         return 'anthropic'; // Default to Anthropic
     });
-    const [agentType, setAgentType] = React.useState<'claude' | 'codex' | 'gemini'>(() => {
-        // Check if agent type was provided in temp data
+    const [agentType, setAgentType] = React.useState<'claude' | 'codex' | 'gemini' | 'opencode'>(() => {
         if (tempSessionData?.agentType) {
-            // Only allow gemini if experiments are enabled
             if (tempSessionData.agentType === 'gemini' && !experimentsEnabled) {
+                return 'claude';
+            }
+            if (tempSessionData.agentType === 'opencode' && !experimentsEnabled) {
                 return 'claude';
             }
             return tempSessionData.agentType;
@@ -322,20 +325,20 @@ function NewSessionWizard() {
         if (lastUsedAgent === 'claude' || lastUsedAgent === 'codex') {
             return lastUsedAgent;
         }
-        // Only allow gemini if experiments are enabled
         if (lastUsedAgent === 'gemini' && experimentsEnabled) {
+            return lastUsedAgent;
+        }
+        if (lastUsedAgent === 'opencode' && experimentsEnabled) {
             return lastUsedAgent;
         }
         return 'claude';
     });
 
-    // Agent cycling handler (for cycling through claude -> codex -> gemini)
-    // Note: Does NOT persist immediately - persistence is handled by useEffect below
     const handleAgentClick = React.useCallback(() => {
         setAgentType(prev => {
-            // Cycle: claude -> codex -> gemini (if experiments) -> claude
             if (prev === 'claude') return 'codex';
             if (prev === 'codex') return experimentsEnabled ? 'gemini' : 'claude';
+            if (prev === 'gemini') return experimentsEnabled ? 'opencode' : 'claude';
             return 'claude';
         });
     }, [experimentsEnabled]);
@@ -995,8 +998,45 @@ function NewSessionWizard() {
         }
     }, [selectedMachineId, selectedPath, router]);
 
-    // Session creation
     const handleCreateSession = React.useCallback(async () => {
+        if (agentType === 'opencode') {
+            const fusionApiUrl = getFusionServerUrl();
+
+            setIsCreating(true);
+
+            try {
+                sync.applySettings({
+                    lastUsedAgent: agentType,
+                    lastUsedProfile: selectedProfileId,
+                });
+
+                const sessionName = `opencode-${Date.now()}`;
+                const result = await createFusionOpenCodeSession(
+                    {
+                        apiUrl: fusionApiUrl,
+                    },
+                    sessionName,
+                    (status) => {
+                        console.log('OpenCode session status:', status);
+                    }
+                );
+
+                clearNewSessionDraft();
+
+                router.replace(`/opencode/${result.fusionSession.id}?sandboxIp=${result.sandboxIp}&openCodeSessionId=${result.openCodeSessionId}`, {
+                    dangerouslySingular() {
+                        return 'session'
+                    },
+                });
+            } catch (error) {
+                console.error('Failed to start OpenCode session', error);
+                const errorMessage = error instanceof Error ? error.message : 'Failed to start cloud session.';
+                Modal.alert(t('common.error'), errorMessage);
+                setIsCreating(false);
+            }
+            return;
+        }
+
         if (!selectedMachineId) {
             Modal.alert(t('common.error'), t('newSession.noMachineSelected'));
             return;
@@ -1011,7 +1051,6 @@ function NewSessionWizard() {
         try {
             let actualPath = selectedPath;
 
-            // Handle worktree creation
             if (sessionType === 'worktree' && experimentsEnabled) {
                 const worktreeResult = await createWorktree(selectedMachineId, selectedPath);
 
@@ -1028,7 +1067,6 @@ function NewSessionWizard() {
                 actualPath = worktreeResult.worktreePath;
             }
 
-            // Save settings
             const updatedPaths = [{ machineId: selectedMachineId, path: selectedPath }, ...recentMachinePaths.filter(rp => rp.machineId !== selectedMachineId)].slice(0, 10);
             sync.applySettings({
                 recentMachinePaths: updatedPaths,
@@ -1038,12 +1076,11 @@ function NewSessionWizard() {
                 lastUsedModelMode: modelMode,
             });
 
-            // Get environment variables from selected profile
             let environmentVariables = undefined;
             if (selectedProfileId) {
                 const selectedProfile = profileMap.get(selectedProfileId);
                 if (selectedProfile) {
-                    environmentVariables = transformProfileToEnvironmentVars(selectedProfile, agentType);
+                    environmentVariables = transformProfileToEnvironmentVars(selectedProfile, agentType as 'claude' | 'codex' | 'gemini');
                 }
             }
 
@@ -1051,23 +1088,20 @@ function NewSessionWizard() {
                 machineId: selectedMachineId,
                 directory: actualPath,
                 approvedNewDirectoryCreation: true,
-                agent: agentType,
+                agent: agentType as 'claude' | 'codex' | 'gemini',
                 environmentVariables
             });
 
             if ('sessionId' in result && result.sessionId) {
-                // Clear draft state on successful session creation
                 clearNewSessionDraft();
 
                 await sync.refreshSessions();
 
-                // Set permission mode and model mode on the session
                 storage.getState().updateSessionPermissionMode(result.sessionId, permissionMode);
                 if (agentType === 'gemini' && modelMode && modelMode !== 'default') {
                     storage.getState().updateSessionModelMode(result.sessionId, modelMode as 'gemini-2.5-pro' | 'gemini-2.5-flash' | 'gemini-2.5-flash-lite');
                 }
 
-                // Send initial message if provided
                 if (sessionPrompt.trim()) {
                     await sync.sendMessage(result.sessionId, sessionPrompt);
                 }
